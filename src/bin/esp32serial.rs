@@ -109,8 +109,14 @@ fn main() -> anyhow::Result<()> {
                 _ = Box::pin(run_serial(shared_state.clone())) => {}
                 _ = Box::pin(wifi_loop.run(wifidriver, sysloop, timer)) => {}
             };
-            Ok(())
-        }))
+        }));
+
+    // not actually returing from main() but we reboot instead
+    info!("main() finished, reboot.");
+    FreeRtos::delay_ms(3000);
+    esp_idf_hal::reset::restart();
+
+    Ok(())
 }
 
 // EOF

@@ -2,7 +2,11 @@
 
 use anyhow::bail;
 use embedded_svc::io::asynch::Write;
-use esp_idf_hal::{gpio::AnyIOPin, uart, units::Hertz};
+use esp_idf_hal::{
+    gpio::{AnyIOPin, PinDriver},
+    uart,
+    units::Hertz,
+};
 use log::*;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
@@ -68,6 +72,7 @@ async fn handle_serial(
         Option::<AnyIOPin>::None,
         &ser_config,
     )?;
+    let mut led = PinDriver::output(my_ser.led)?;
 
     info!("UART1 opened.");
 
@@ -75,8 +80,10 @@ async fn handle_serial(
     loop {
         tokio::select! {
             Some(msg) = a_recv.recv() => {
+                led.toggle().ok();
                 // info!("serial write {} bytes", msg.len());
                 uart.write_all(msg.as_ref()).await?;
+
             }
 
             res = uart.read(&mut buf) => {
@@ -86,6 +93,7 @@ async fn handle_serial(
                         return Ok(());
                     }
                     Ok(n) => {
+                        led.toggle().ok();
                         // info!("Serial read {n} bytes.");
                         a_send.send(buf[0..n].to_owned())?;
                     }

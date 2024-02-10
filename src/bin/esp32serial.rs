@@ -1,7 +1,11 @@
 // bin/esp32serial.rs
 #![warn(clippy::large_futures)]
 
-use esp_idf_hal::{gpio::IOPin, prelude::Peripherals};
+use esp_idf_hal::{
+    delay::FreeRtos,
+    gpio::{InputPin, OutputPin},
+    prelude::Peripherals,
+};
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop, nvs, timer::EspTaskTimerService, wifi::WifiDriver,
 };
@@ -72,8 +76,9 @@ fn main() -> anyhow::Result<()> {
 
     let peripherals = Peripherals::take().unwrap();
     let pins = peripherals.pins;
-    let tx = pins.gpio0.downgrade();
-    let rx = pins.gpio1.downgrade();
+    let led = pins.gpio8.downgrade_output();
+    let tx = pins.gpio0.downgrade_output();
+    let rx = pins.gpio1.downgrade_input();
     let uart = peripherals.uart1;
 
     let wifidriver = WifiDriver::new(
@@ -90,7 +95,7 @@ fn main() -> anyhow::Result<()> {
         myid: RwLock::new("esp32temp".into()),
         nvs: RwLock::new(nvs),
         reset: RwLock::new(false),
-        serial: RwLock::new(Some(MySerial { uart, tx, rx })),
+        serial: RwLock::new(Some(MySerial { uart, tx, rx, led })),
     });
     let shared_state = Arc::new(state);
 

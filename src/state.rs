@@ -2,15 +2,16 @@
 
 use crate::*;
 
-use esp_idf_hal::{gpio::AnyIOPin, uart::UART1};
+use esp_idf_hal::{gpio::*, uart::UART1};
 use esp_idf_svc::nvs;
 use std::net::Ipv4Addr;
 use tokio::sync::RwLock;
 
 pub struct MySerial {
     pub uart: UART1,
-    pub tx: AnyIOPin,
-    pub rx: AnyIOPin,
+    pub tx: AnyOutputPin,
+    pub rx: AnyInputPin,
+    pub led: AnyOutputPin,
 }
 unsafe impl Sync for MySerial {}
 

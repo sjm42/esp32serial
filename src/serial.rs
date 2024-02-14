@@ -38,12 +38,12 @@ pub async fn run_serial(state: Arc<Pin<Box<MyState>>>) -> anyhow::Result<()> {
     // mpsc = multi-producer, single consumer queue
     let (write_tx, write_rx) = mpsc::channel(CHANSZ);
 
-    tokio::spawn(Box::pin(handle_network(
-        state.clone(),
-        read_tx.clone(),
-        write_tx,
-    )));
-    Box::pin(handle_serial(state, read_tx, write_rx)).await
+    let _ = tokio::try_join!(
+        Box::pin(handle_network(state.clone(), read_tx.clone(), write_tx,)),
+        Box::pin(handle_serial(state, read_tx, write_rx))
+    );
+    // if any of the above tasks fail, we return and main() will reboot the whole system
+    Ok(())
 }
 
 async fn handle_serial(

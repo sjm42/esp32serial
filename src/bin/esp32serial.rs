@@ -116,7 +116,7 @@ fn main() -> anyhow::Result<()> {
             };
         }));
 
-    // not actually returing from main() but we reboot instead
+    // not actually returning from main() but we reboot instead!
     info!("main() finished, reboot.");
     FreeRtos::delay_ms(3000);
     esp_idf_hal::reset::restart();

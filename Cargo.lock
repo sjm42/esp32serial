@@ -750,7 +750,7 @@ dependencies = [
 
 [[package]]
 name = "esp32serial"
-version = "0.1.2"
+version = "0.1.3"
 dependencies = [
  "anyhow",
  "axum",

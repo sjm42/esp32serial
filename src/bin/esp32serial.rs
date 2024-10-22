@@ -1,20 +1,22 @@
 // bin/esp32serial.rs
 #![warn(clippy::large_futures)]
 
+use std::{sync::Arc, time::Duration};
+
+use esp_idf_hal::gpio::{AnyInputPin, Input, PinDriver};
 use esp_idf_hal::{
     delay::FreeRtos,
     gpio::{InputPin, OutputPin},
     prelude::Peripherals,
 };
-use esp_idf_svc::{
-    eventloop::EspSystemEventLoop, nvs, timer::EspTaskTimerService, wifi::WifiDriver,
-};
+use esp_idf_svc::{eventloop::EspSystemEventLoop, hal::gpio, nvs, ping, timer::EspTaskTimerService, wifi::WifiDriver};
 use esp_idf_sys::{self as _, esp, esp_app_desc};
-use log::*;
-use std::{net, sync::Arc};
-use tokio::sync::RwLock;
+use tokio::time::sleep;
 
 use esp32serial::*;
+
+const CONFIG_RESET_COUNT: i32 = 9;
+
 
 esp_app_desc!();
 
@@ -52,14 +54,6 @@ fn main() -> anyhow::Result<()> {
         Err(e) => panic!("Could not get namespace {ns}: {e:?}"),
     };
 
-    #[cfg(feature = "reset_settings")]
-    let config = {
-        let c = MyConfig::default();
-        c.to_nvs(&mut nvs)?;
-        c
-    };
-
-    #[cfg(not(feature = "reset_settings"))]
     let config = match MyConfig::from_nvs(&mut nvs) {
         None => {
             error!("Could not read nvs config, using defaults");
@@ -76,10 +70,12 @@ fn main() -> anyhow::Result<()> {
 
     let peripherals = Peripherals::take().unwrap();
     let pins = peripherals.pins;
-    let led = pins.gpio8.downgrade_output();
+
     let tx = pins.gpio0.downgrade_output();
     let rx = pins.gpio1.downgrade_input();
     let uart = peripherals.uart1;
+    let led = pins.gpio8.downgrade_output();
+    let button = gpio::PinDriver::input(pins.gpio9.downgrade_input())?;
 
     let wifidriver = WifiDriver::new(
         peripherals.modem,
@@ -87,16 +83,7 @@ fn main() -> anyhow::Result<()> {
         Some(nvs_default_partition),
     )?;
 
-    let state = Box::pin(MyState {
-        config: RwLock::new(config),
-        cnt: RwLock::new(0),
-        wifi_up: RwLock::new(false),
-        ip_addr: RwLock::new(net::Ipv4Addr::new(0, 0, 0, 0)),
-        myid: RwLock::new("esp32temp".into()),
-        nvs: RwLock::new(nvs),
-        reset: RwLock::new(false),
-        serial: RwLock::new(Some(MySerial { uart, tx, rx, led })),
-    });
+    let state = Box::pin(MyState::new(config, nvs, MySerial { uart, tx, rx, led }));
     let shared_state = Arc::new(state);
 
     tokio::runtime::Builder::new_current_thread()
@@ -110,9 +97,12 @@ fn main() -> anyhow::Result<()> {
 
             info!("Entering main loop...");
             tokio::select! {
-                _ = Box::pin(run_api_server(shared_state.clone())) => {}
-                _ = Box::pin(run_serial(shared_state.clone())) => {}
-                _ = Box::pin(wifi_loop.run(wifidriver, sysloop, timer)) => {}
+                _ = Box::pin(poll_reset(shared_state.clone(), button)) => { error!("poll_reset() ended."); }
+                _ = Box::pin(run_api_server(shared_state.clone())) => { error!("run_api_server() ended."); }
+                _ = Box::pin(run_serial(shared_state.clone())) => { error!("run_serial() ended."); }
+                _ = Box::pin(wifi_loop.run(wifidriver, sysloop, timer)) => { error!("wifi_loop() ended."); }
+                _ = Box::pin(pinger(shared_state.clone())) => { error!("pinger() ended."); }
+
             };
         }));
 
@@ -120,8 +110,79 @@ fn main() -> anyhow::Result<()> {
     info!("main() finished, reboot.");
     FreeRtos::delay_ms(3000);
     esp_idf_hal::reset::restart();
+}
 
+async fn poll_reset(mut state: Arc<Pin<Box<MyState>>>, button: PinDriver<'_, AnyInputPin, Input>) -> anyhow::Result<()> {
+    loop {
+        sleep(Duration::from_secs(2)).await;
+
+
+        if *state.restart.read().await {
+            esp_idf_hal::reset::restart();
+        }
+
+        if button.is_low() {
+            Box::pin(reset_button(&mut state, &button)).await?;
+        }
+    }
+}
+
+async fn reset_button<'a, 'b>(
+    state: &mut Arc<std::pin::Pin<Box<MyState>>>,
+    button: &PinDriver<'a, AnyInputPin, Input>,
+) -> anyhow::Result<()> {
+    let mut reset_cnt = CONFIG_RESET_COUNT;
+
+    while button.is_low() {
+        // button is pressed and kept down, countdown and factory reset if reach zero
+        let msg = format!("Reset? {reset_cnt}");
+        error!("{msg}");
+
+        if reset_cnt == 0 {
+            // okay do factory reset now
+            error!("Factory resetting...");
+
+            let new_config = MyConfig::default();
+            new_config.to_nvs(&mut *state.nvs.write().await)?;
+            sleep(Duration::from_millis(2000)).await;
+            esp_idf_hal::reset::restart();
+        }
+
+        reset_cnt -= 1;
+        sleep(Duration::from_millis(500)).await;
+        continue;
+    }
     Ok(())
+}
+
+async fn pinger(state: Arc<std::pin::Pin<Box<MyState>>>) -> anyhow::Result<()> {
+    loop {
+        sleep(Duration::from_secs(300)).await;
+
+        if let Some(ping_ip) = *state.ping_ip.read().await {
+            let if_idx = *state.if_index.read().await;
+            if if_idx > 0 {
+                tracing::log::info!("Starting ping {ping_ip} (if_idx {if_idx})");
+                let conf = ping::Configuration {
+                    count: 2,
+                    interval: Duration::from_millis(500),
+                    timeout: Duration::from_millis(200),
+                    data_size: 64,
+                    tos: 0,
+                };
+                let mut ping = ping::EspPing::new(if_idx);
+                let res = ping.ping(ping_ip, &conf)?;
+                tracing::log::info!("Pinger result: {res:?}");
+                if res.received == 0 {
+                    tracing::log::error!("Ping failed, rebooting.");
+                    sleep(Duration::from_millis(2000)).await;
+                    esp_idf_hal::reset::restart();
+                }
+            } else {
+                tracing::log::error!("No if_index. wat?");
+            }
+        }
+    }
 }
 
 // EOF

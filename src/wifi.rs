@@ -9,12 +9,10 @@ use esp_idf_svc::{
     timer::{EspTimerService, Task},
     wifi::{AsyncWifi, EspWifi, WifiDriver},
 };
-use esp_idf_sys::{self as _};
-use log::*;
-use std::sync::Arc;
 use tokio::time::{sleep, Duration};
 
 use crate::*;
+
 
 pub struct WifiLoop<'a> {
     pub state: Arc<std::pin::Pin<Box<MyState>>>,
@@ -30,17 +28,17 @@ impl<'a> WifiLoop<'a> {
     ) -> anyhow::Result<()> {
         info!("Initializing Wi-Fi...");
 
-        let ipv4_config = if self.state.config.read().await.v4dhcp {
+        let ipv4_config = if self.state.config.v4dhcp {
             ipv4::ClientConfiguration::DHCP(ipv4::DHCPClientSettings::default())
         } else {
             ipv4::ClientConfiguration::Fixed(ipv4::ClientSettings {
-                ip: self.state.config.read().await.v4addr,
+                ip: self.state.config.v4addr,
                 subnet: ipv4::Subnet {
-                    gateway: self.state.config.read().await.v4gw,
-                    mask: ipv4::Mask(self.state.config.read().await.v4mask),
+                    gateway: self.state.config.v4gw,
+                    mask: ipv4::Mask(self.state.config.v4mask),
                 },
-                dns: None,
-                secondary_dns: None,
+                dns: Some(self.state.config.dns1),
+                secondary_dns: Some(self.state.config.dns2),
             })
         };
         // info!("IP config: {ipv4_config:?}");
@@ -51,7 +49,7 @@ impl<'a> WifiLoop<'a> {
         })?;
         let mac = net_if.get_mac()?;
         *self.state.myid.write().await = format!(
-            "esp32temp-{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
+            "esp32clock-{:02X}:{:02X}:{:02X}:{:02X}:{:02X}:{:02X}",
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
         );
 
@@ -62,52 +60,23 @@ impl<'a> WifiLoop<'a> {
 
         if let Err(e) = Box::pin(self.initial_connect()).await {
             error!("WiFi connection failed: {e:?}");
-            {
-                // failed boot, increase boot fail counter or reset "factory" settings
-
-                let mut nvs = self.state.nvs.write().await;
-                let mut config = self.state.config.write().await;
-
-                let cnt = &mut config.bfc;
-                if *cnt > BOOT_FAIL_MAX {
-                    error!("Maximum boot fails. Resetting settings to default.");
-                    let c = MyConfig::default();
-                    if c.to_nvs(&mut nvs).is_ok() {
-                        info!("Successfully saved default config to nvs.");
-                    }
-                } else {
-                    *cnt += 1;
-                    config.to_nvs(&mut nvs).ok();
-                }
-            }
             error!("Resetting...");
             sleep(Duration::from_secs(5)).await;
             esp_idf_hal::reset::restart();
         }
 
-        {
-            // Successful startup, wifi connected: reset fail counter.
-            let mut config = self.state.config.write().await;
-            let cnt = &mut config.bfc;
-            if *cnt > 0 {
-                info!("Successful startup, resetting boot fail counter.");
-                *cnt = 0;
-                let mut nvs = self.state.nvs.write().await;
-                if config.to_nvs(&mut nvs).is_ok() {
-                    info!("Successfully saved config to nvs.");
-                }
-            }
-        }
-        sleep(Duration::from_secs(2)).await;
+        sleep(Duration::from_secs(5)).await;
 
-        *self.state.ip_addr.write().await = self
+        let netif = self
             .wifi
             .as_ref()
             .unwrap()
             .wifi()
-            .sta_netif()
-            .get_ip_info()?
-            .ip;
+            .sta_netif();
+        let ip_info = netif.get_ip_info()?;
+        *self.state.if_index.write().await = netif.get_index();
+        *self.state.ip_addr.write().await = ip_info.ip;
+        *self.state.ping_ip.write().await = Some(ip_info.subnet.gateway);
         *self.state.wifi_up.write().await = true;
 
         self.stay_connected().await
@@ -120,21 +89,19 @@ impl<'a> WifiLoop<'a> {
             ssid: self
                 .state
                 .config
-                .read()
-                .await
                 .wifi_ssid
                 .as_str()
                 .try_into()
                 .unwrap(),
+
             password: self
                 .state
                 .config
-                .read()
-                .await
                 .wifi_pass
                 .as_str()
                 .try_into()
                 .unwrap(),
+
             ..Default::default()
         }))?;
 

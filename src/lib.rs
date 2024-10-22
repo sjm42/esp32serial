@@ -2,6 +2,7 @@
 #![warn(clippy::large_futures)]
 
 pub use std::{pin::Pin, sync::Arc};
+pub use tracing::*;
 
 mod config;
 pub use config::*;
@@ -17,5 +18,7 @@ pub use wifi::*;
 
 mod serial;
 pub use serial::*;
+
+pub const FW_VERSION: &str = env!("CARGO_PKG_VERSION");
 
 // EOF

@@ -7,7 +7,6 @@ use esp_idf_hal::{
     uart,
     units::Hertz,
 };
-use log::*;
 use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
@@ -53,7 +52,7 @@ async fn handle_serial(
 ) -> anyhow::Result<()> {
     info!("UART1 initialization...");
 
-    let bps = state.config.read().await.bps;
+    let bps = state.config.bps;
     use esp_idf_hal::uart::config::*;
     let ser_config = Config::new()
         .flow_control(FlowControl::None)
@@ -119,7 +118,7 @@ async fn handle_network(
         match stream {
             Ok((stream, addr)) => {
                 let c = {
-                    let mut c = state.cnt.write().await;
+                    let mut c = state.api_cnt.write().await;
                     *c += 1;
                     *c
                 };

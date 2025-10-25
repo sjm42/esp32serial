@@ -1,6 +1,5 @@
 // serial.rs
 
-use anyhow::bail;
 use embedded_svc::io::asynch::Write;
 use esp_idf_hal::{
     gpio::{AnyIOPin, PinDriver},
@@ -11,7 +10,6 @@ use tokio::{
     io::{AsyncReadExt, AsyncWriteExt},
     net::{TcpListener, TcpStream},
     sync::{broadcast, mpsc},
-    time::{sleep, Duration},
 };
 
 use crate::*;
@@ -117,17 +115,13 @@ async fn handle_network(
         let stream = listener.accept().await;
         match stream {
             Ok((stream, addr)) => {
-                let c = {
-                    let mut c = state.api_cnt.write().await;
-                    *c += 1;
-                    *c
-                };
+                let cnt = state.api_cnt.fetch_add(1, Ordering::Relaxed);
 
-                info!("Client #{c} connected from {}:{}", addr, addr.port());
+                info!("Client #{cnt} connected from {}:{}", addr, addr.port());
                 let client_read_atx = read_atx.subscribe();
                 let client_write_atx = write_atx.clone();
                 tokio::spawn(async move {
-                    Box::pin(handle_client(c, stream, client_read_atx, client_write_atx)).await
+                    Box::pin(handle_client(cnt, stream, client_read_atx, client_write_atx)).await
                 });
             }
             Err(e) => {
@@ -140,7 +134,7 @@ async fn handle_network(
 }
 
 async fn handle_client(
-    c: u64,
+    c: u32,
     mut sock: TcpStream,
     mut rx: broadcast::Receiver<Vec<u8>>,
     tx: mpsc::Sender<Vec<u8>>,

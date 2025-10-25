@@ -1,15 +1,22 @@
 // apiserver.rs
 
-use axum::body::Body;
-use axum::http::{header, Response};
-use axum::response::IntoResponse;
-use axum::{extract::State, http::StatusCode, response::Html, routing::*, Json, Router};
-pub use axum_macros::debug_handler;
-use std::{net, net::SocketAddr, pin::Pin, sync::Arc};
 use askama::Template;
+use axum::{
+    body::Body, extract::{Form, State},
+    http::StatusCode,
+    http::{header, Response},
+    response::Html,
+    response::IntoResponse,
+    routing::*,
+    Json,
+    Router,
+};
+pub use axum_macros::debug_handler;
+use embedded_svc::http::client::Client as HttpClient;
+use esp_idf_svc::{http::client::EspHttpConnection, io, ota::EspOta};
+use std::any::Any;
+use std::{net, net::SocketAddr, pin::Pin, sync::Arc};
 use tokio::time::{sleep, Duration};
-
-// use tower_http::trace::TraceLayer;
 
 use crate::*;
 
@@ -28,8 +35,9 @@ pub async fn run_api_server(state: Arc<Pin<Box<MyState>>>) -> anyhow::Result<()>
         .route("/", get(get_index))
         .route("/favicon.ico", get(get_favicon))
         .route("/form.js", get(get_formjs))
-        .route("/conf", get(get_conf).post(set_conf).options(options))
-        .route("/reset_conf", get(reset_conf))
+        .route("/conf", get(get_config).post(set_config).options(options))
+        .route("/reset_conf", get(reset_config))
+        .route("/fw", post(update_fw).options(options))
         .with_state(state);
     // .layer(TraceLayer::new_for_http());
 
@@ -39,11 +47,7 @@ pub async fn run_api_server(state: Arc<Pin<Box<MyState>>>) -> anyhow::Result<()>
 }
 
 pub async fn options(State(state): State<Arc<Pin<Box<MyState>>>>) -> Response<Body> {
-    let cnt = {
-        let mut c = state.api_cnt.write().await;
-        *c += 1;
-        *c
-    };
+    let cnt = state.api_cnt.fetch_add(1, Ordering::Relaxed);
     info!("#{cnt} options()");
 
     (
@@ -57,16 +61,12 @@ pub async fn options(State(state): State<Arc<Pin<Box<MyState>>>>) -> Response<Bo
         .into_response()
 }
 
-
 pub async fn get_index(State(state): State<Arc<Pin<Box<MyState>>>>) -> Response<Body> {
-    let cnt = {
-        let mut c = state.api_cnt.write().await;
-        *c += 1;
-        *c
-    };
+    let cnt = state.api_cnt.fetch_add(1, Ordering::Relaxed);
     info!("#{cnt} get_index()");
 
-    let index = match state.config.clone().render() {
+    let value_tuple: (&str, &dyn Any) = ("ota_slot", &state.ota_slot.clone());
+    let index = match state.config.clone().render_with_values(&value_tuple) {
         Err(e) => {
             let err_msg = format!("Index template error: {e:?}\n");
             error!("{err_msg}");
@@ -78,11 +78,7 @@ pub async fn get_index(State(state): State<Arc<Pin<Box<MyState>>>>) -> Response<
 }
 
 pub async fn get_favicon(State(state): State<Arc<Pin<Box<MyState>>>>) -> Response<Body> {
-    let cnt = {
-        let mut c = state.api_cnt.write().await;
-        *c += 1;
-        *c
-    };
+    let cnt = state.api_cnt.fetch_add(1, Ordering::Relaxed);
     info!("#{cnt} get_favicon()");
 
     let favicon = include_bytes!("favicon.ico");
@@ -95,11 +91,7 @@ pub async fn get_favicon(State(state): State<Arc<Pin<Box<MyState>>>>) -> Respons
 }
 
 pub async fn get_formjs(State(state): State<Arc<Pin<Box<MyState>>>>) -> Response<Body> {
-    let cnt = {
-        let mut c = state.api_cnt.write().await;
-        *c += 1;
-        *c
-    };
+    let cnt = state.api_cnt.fetch_add(1, Ordering::Relaxed);
     info!("#{cnt} get_formjs()");
 
     let formjs = include_bytes!("form.js");
@@ -110,26 +102,20 @@ pub async fn get_formjs(State(state): State<Arc<Pin<Box<MyState>>>>) -> Response
     )
         .into_response()
 }
-pub async fn get_conf(State(state): State<Arc<Pin<Box<MyState>>>>) -> (StatusCode, Json<MyConfig>) {
-    let cnt = {
-        let mut c = state.api_cnt.write().await;
-        *c += 1;
-        *c
-    };
+pub async fn get_config(
+    State(state): State<Arc<Pin<Box<MyState>>>>,
+) -> (StatusCode, Json<MyConfig>) {
+    let cnt = state.api_cnt.fetch_add(1, Ordering::Relaxed);
     info!("#{cnt} get_conf()");
 
     (StatusCode::OK, Json(state.config.clone()))
 }
 
-pub async fn set_conf(
+pub async fn set_config(
     State(state): State<Arc<Pin<Box<MyState>>>>,
     Json(mut config): Json<MyConfig>,
 ) -> (StatusCode, String) {
-    let cnt = {
-        let mut c = state.api_cnt.write().await;
-        *c += 1;
-        *c
-    };
+    let cnt = state.api_cnt.fetch_add(1, Ordering::Relaxed);
     info!("#{cnt} set_conf()");
 
     if config.v4mask > 30 {
@@ -148,22 +134,18 @@ pub async fn set_conf(
     }
 
     info!("Saving new config to nvs...");
-    Box::pin(save_conf(state, config)).await
+    Box::pin(save_config(state, config)).await
 }
 
-pub async fn reset_conf(State(state): State<Arc<Pin<Box<MyState>>>>) -> (StatusCode, String) {
-    let cnt = {
-        let mut c = state.api_cnt.write().await;
-        *c += 1;
-        *c
-    };
+pub async fn reset_config(State(state): State<Arc<Pin<Box<MyState>>>>) -> (StatusCode, String) {
+    let cnt = state.api_cnt.fetch_add(1, Ordering::Relaxed);
     info!("#{cnt} reset_conf()");
 
     info!("Saving  default config to nvs...");
-    Box::pin(save_conf(state, MyConfig::default())).await
+    Box::pin(save_config(state, MyConfig::default())).await
 }
 
-async fn save_conf(state: Arc<Pin<Box<MyState>>>, config: MyConfig) -> (StatusCode, String) {
+async fn save_config(state: Arc<Pin<Box<MyState>>>, config: MyConfig) -> (StatusCode, String) {
     let mut nvs = state.nvs.write().await;
     match config.to_nvs(&mut nvs) {
         Ok(_) => {
@@ -179,4 +161,37 @@ async fn save_conf(state: Arc<Pin<Box<MyState>>>, config: MyConfig) -> (StatusCo
         }
     }
 }
+
+async fn update_fw(
+    State(state): State<Arc<Pin<Box<MyState>>>>,
+    Form(fw_update): Form<UpdateFirmware>,
+) -> Response<Body> {
+    let cnt = state.api_cnt.fetch_add(1, Ordering::Relaxed);
+    info!("#{cnt} update_fw()");
+
+    info!("Firmware update: \n{fw_update:#?}");
+    let url = fw_update.url.to_owned();
+
+    let mut ota = EspOta::new().unwrap();
+    let mut client = HttpClient::wrap(EspHttpConnection::new(&Default::default()).unwrap());
+    let req = client.get(&url).unwrap();
+    let resp = req.submit().unwrap();
+    if resp.status() != StatusCode::OK {
+        return StatusCode::from_u16(resp.status()).unwrap().into_response();
+    }
+
+    let update_src = Box::new(resp);
+    let mut update = ota.initiate_update().unwrap();
+    let mut buffer = [0_u8; 8192];
+
+    io::utils::copy(update_src, &mut update, &mut buffer).unwrap();
+    update.complete().unwrap();
+
+    info!("Update done. Restarting...");
+    esp_idf_svc::hal::reset::restart();
+
+    // not reached
+    // StatusCode::OK.into_response()
+}
+
 // EOF

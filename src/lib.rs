@@ -1,24 +1,40 @@
 // lib.rs
 #![warn(clippy::large_futures)]
 
-pub use std::{pin::Pin, sync::Arc};
+pub use anyhow::bail;
+pub use serde::Deserialize;
+pub use std::{
+    net,
+    pin::Pin,
+    sync::{
+        atomic::{AtomicU32, Ordering},
+        Arc,
+    },
+};
+pub use tokio::{
+    sync::RwLock,
+    task,
+    time::{sleep, Duration},
+};
 pub use tracing::*;
 
-mod config;
-pub use config::*;
-
-mod state;
-pub use state::*;
-
-mod apiserver;
 pub use apiserver::*;
-
-mod wifi;
+pub use config::*;
+pub use serial::*;
+pub use state::*;
 pub use wifi::*;
 
-mod serial;
-pub use serial::*;
-
 pub const FW_VERSION: &str = env!("CARGO_PKG_VERSION");
+
+#[derive(Debug, Deserialize)]
+pub struct UpdateFirmware {
+    url: String,
+}
+
+mod apiserver;
+mod config;
+mod serial;
+mod state;
+mod wifi;
 
 // EOF

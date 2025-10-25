@@ -1,11 +1,7 @@
 // state.rs
 
-use std::net;
-
 use esp_idf_hal::{gpio::*, uart::UART1};
 use esp_idf_svc::nvs;
-use std::net::Ipv4Addr;
-use tokio::sync::RwLock;
 
 use crate::*;
 
@@ -19,22 +15,30 @@ unsafe impl Sync for MySerial {}
 
 pub struct MyState {
     pub config: MyConfig,
-    pub api_cnt: RwLock<u64>,
+    pub ota_slot: String,
+
+    pub api_cnt: AtomicU32,
     pub nvs: RwLock<nvs::EspNvs<nvs::NvsDefault>>,
     pub wifi_up: RwLock<bool>,
     pub if_index: RwLock<u32>,
-    pub ip_addr: RwLock<Ipv4Addr>,
-    pub ping_ip: RwLock<Option<Ipv4Addr>>,
+    pub ip_addr: RwLock<net::Ipv4Addr>,
+    pub ping_ip: RwLock<Option<net::Ipv4Addr>>,
     pub myid: RwLock<String>,
     pub restart: RwLock<bool>,
     pub serial: RwLock<Option<MySerial>>,
 }
 
 impl MyState {
-    pub fn new(config: MyConfig, nvs: nvs::EspNvs<nvs::NvsDefault>, serial: MySerial) -> Self {
+    pub fn new(
+        config: MyConfig,
+        ota_slot: String,
+        nvs: nvs::EspNvs<nvs::NvsDefault>,
+        serial: MySerial,
+    ) -> Self {
         MyState {
             config,
-            api_cnt: RwLock::new(0),
+            ota_slot,
+            api_cnt: 0.into(),
             nvs: RwLock::new(nvs),
             wifi_up: RwLock::new(false),
             if_index: RwLock::new(0),

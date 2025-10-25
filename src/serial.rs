@@ -108,7 +108,7 @@ async fn handle_network(
     read_atx: broadcast::Sender<Vec<u8>>,
     write_atx: mpsc::Sender<Vec<u8>>,
 ) -> anyhow::Result<()> {
-    let listener = TcpListener::bind("0.0.0.0:23").await?;
+    let listener = TcpListener::bind(format!("0.0.0.0:{}", state.config.serial_tcp_port)).await?;
     info!("Serial server listening...");
 
     loop {
@@ -121,7 +121,13 @@ async fn handle_network(
                 let client_read_atx = read_atx.subscribe();
                 let client_write_atx = write_atx.clone();
                 tokio::spawn(async move {
-                    Box::pin(handle_client(cnt, stream, client_read_atx, client_write_atx)).await
+                    Box::pin(handle_client(
+                        cnt,
+                        stream,
+                        client_read_atx,
+                        client_write_atx,
+                    ))
+                    .await
                 });
             }
             Err(e) => {

@@ -14,17 +14,18 @@
 <h2>Settings</h2>
 {% let myform = [
     ("text", "port", port.to_string(), "Port (1-65535)"),
-    ("text", "bps", bps.to_string(), "Serial port bps"),
     ("text", "wifi_ssid", wifi_ssid.to_string(), "WiFi SSID"),
     ("checkbox", "wifi_wpa2ent", wifi_wpa2ent.to_string(), "WPA2 Enterprise"),
     ("text", "wifi_username", wifi_username.to_string(), "WiFi username"),
-    ("text", "wifi_pass", wifi_pass.to_string(), "WiFi password"),
+    ("password", "wifi_pass", wifi_pass.to_string(), "WiFi password"),
     ("checkbox", "v4dhcp", v4dhcp.to_string(), "DHCP enabled"),
     ("text", "v4addr", v4addr.to_string(), "IPv4 address"),
     ("text", "v4mask", v4mask.to_string(), "IPv4 mask length (0-30)"),
     ("text", "v4gw", v4gw.to_string(), "IPv4 gateway"),
     ("text", "dns1", dns1.to_string(), "DNS 1"),
-    ("text", "dns2", dns2.to_string(), "DNS 2")
+    ("text", "dns2", dns2.to_string(), "DNS 2"),
+    ("text", "bps", bps.to_string(), "Serial port bps"),
+    ("text", "serial_tcp_port", serial_tcp_port.to_string(), "Serial tcp port"),
 ] -%}
 <form action="/conf" method="POST" name="esp32cfg">
     <table>

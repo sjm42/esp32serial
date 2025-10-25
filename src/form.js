@@ -23,8 +23,9 @@ var postCfgDataAsJson = async ({url, formData}) => {
     let formObj = Object.fromEntries(formData.entries());
     // convert integers
     formObj.port = parseInt(formObj.port);
-    formObj.bps = parseInt(formObj.bps);
     formObj.v4mask = parseInt(formObj.v4mask);
+    formObj.bps = parseInt(formObj.bps);
+    formObj.serial_tcp_port = parseInt(formObj.serial_tcp_port);
     // convert booleans
     formObj.wifi_wpa2ent = (formObj.wifi_wpa2ent === "on");
     formObj.v4dhcp = (formObj.v4dhcp === "on");

@@ -12,6 +12,7 @@ use crate::*;
 pub const NVS_BUF_SIZE: usize = 256;
 pub const BOOT_FAIL_MAX: u8 = 4;
 const DEFAULT_API_PORT: u16 = 80;
+const DEFAULT_SERIAL_TCP_PORT: u16 = 23;
 
 const CONFIG_NAME: &str = "cfg";
 
@@ -19,7 +20,6 @@ const CONFIG_NAME: &str = "cfg";
 #[template(path = "index.html.ask", escape = "html")]
 pub struct MyConfig {
     pub port: u16,
-    pub bps: u32,
 
     pub wifi_ssid: String,
     pub wifi_pass: String,
@@ -32,6 +32,9 @@ pub struct MyConfig {
     pub v4gw: net::Ipv4Addr,
     pub dns1: net::Ipv4Addr,
     pub dns2: net::Ipv4Addr,
+
+    pub bps: u32,
+    pub serial_tcp_port: u16,
 }
 
 impl Default for MyConfig {
@@ -55,6 +58,7 @@ impl Default for MyConfig {
             dns2: net::Ipv4Addr::new(0, 0, 0, 0),
 
             bps: 9600,
+            serial_tcp_port: DEFAULT_SERIAL_TCP_PORT,
         }
     }
 }

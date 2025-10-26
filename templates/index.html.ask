@@ -6,7 +6,7 @@
   <script src="./form.js"></script>
 </head>
 
-<body onload="onLoad()">
+<body>
 <h1>ESP32 remote serial port</h1>
 <p>Firmware version {{ crate::FW_VERSION }}</p>
 <p>OTA slot {{ askama::get_value::<String>("ota_slot")? }}</p>

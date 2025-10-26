@@ -2,7 +2,7 @@
 #![warn(clippy::large_futures)]
 
 pub use anyhow::bail;
-pub use serde::Deserialize;
+use serde::{Deserialize, Serialize};
 pub use std::{
     net,
     pin::Pin,

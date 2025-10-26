@@ -1,17 +1,15 @@
 [package]
 name = "esp32serial"
-version = "1.1.0"
+version = "1.1.1"
 authors = ["Sami J. Mäkinen <sjm@iki.fi>"]
 edition = "2024"
 resolver = "2"
-
 
 
 [[bin]]
 name = "esp32serial"
 harness = false     # do not use the built in cargo test harness -> resolve rust-analyzer errors
 # test = false
-
 
 [features]
 default = ["esp32c3"]
@@ -25,7 +23,6 @@ askama = "0"
 axum = { version = "0", features = ["http1", "json"] }
 axum-macros = "0"
 crc = "3"
-embedded-hal = "1"
 embedded-svc = { version = "0", features = ["experimental"] }
 esp-idf-hal = "0"
 esp-idf-svc = { version = "0", features = ["alloc", "experimental"] }
@@ -33,9 +30,7 @@ esp-idf-sys = { version = "0", features = ["binstart"] }
 postcard = { version = "1", features = ["alloc", "use-crc"] }
 serde = "1"
 tokio = { version = "1", features = ["rt", "net", "io-util"] }
-# tower-http = { version = "0" }
 tracing = "0"
-
 
 [build-dependencies]
 build-data = "0"
@@ -49,7 +44,6 @@ opt-level = "z"
 codegen-units = 1
 lto = "fat"
 strip = true
-
 
 [profile.dev]
 debug = true

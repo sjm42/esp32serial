@@ -29,15 +29,19 @@ pub async fn run_serial(state: Arc<Pin<Box<MyState>>>) -> anyhow::Result<()> {
     // Note: here read/write in variable naming is referring to the serial port data direction
 
     // create a broadcast channel for sending serial msgs to all clients
-    let (read_tx, _read_rx) = broadcast::channel(CHANSZ);
+    let (ser_read_tx, _) = broadcast::channel(CHANSZ);
 
     // create an mpsc channel for receiving serial port input from any client
     // mpsc = multi-producer, single consumer queue
-    let (write_tx, write_rx) = mpsc::channel(CHANSZ);
+    let (ser_write_tx, ser_write_rx) = mpsc::channel(CHANSZ);
 
     let _ = tokio::try_join!(
-        Box::pin(handle_network(state.clone(), read_tx.clone(), write_tx,)),
-        Box::pin(handle_serial(state, read_tx, write_rx))
+        Box::pin(handle_network(
+            state.clone(),
+            ser_read_tx.clone(),
+            ser_write_tx,
+        )),
+        Box::pin(handle_serial(state, ser_read_tx, ser_write_rx))
     );
     // if any of the above tasks fail, we return and main() will reboot the whole system
     Ok(())
@@ -45,8 +49,8 @@ pub async fn run_serial(state: Arc<Pin<Box<MyState>>>) -> anyhow::Result<()> {
 
 async fn handle_serial(
     state: Arc<Pin<Box<MyState>>>,
-    a_send: broadcast::Sender<Vec<u8>>,
-    mut a_recv: mpsc::Receiver<Vec<u8>>,
+    ser_read_tx: broadcast::Sender<Vec<u8>>,
+    mut ser_write_rx: mpsc::Receiver<Vec<u8>>,
 ) -> anyhow::Result<()> {
     info!("UART1 initialization...");
 
@@ -76,7 +80,7 @@ async fn handle_serial(
     let mut buf = [0; BUFSZ];
     loop {
         tokio::select! {
-            Some(msg) = a_recv.recv() => {
+            Some(msg) = ser_write_rx.recv() => {
                 led.toggle().ok();
                 // info!("serial write {} bytes", msg.len());
                 uart.write_all(msg.as_ref()).await?;
@@ -92,7 +96,7 @@ async fn handle_serial(
                     Ok(n) => {
                         led.toggle().ok();
                         // info!("Serial read {n} bytes.");
-                        a_send.send(buf[0..n].to_owned())?;
+                        ser_read_tx.send(buf[0..n].to_owned())?;
                     }
                     Err(e) => {
                         bail!(e);
@@ -105,8 +109,8 @@ async fn handle_serial(
 
 async fn handle_network(
     state: Arc<Pin<Box<MyState>>>,
-    read_atx: broadcast::Sender<Vec<u8>>,
-    write_atx: mpsc::Sender<Vec<u8>>,
+    ser_read_tx: broadcast::Sender<Vec<u8>>,
+    ser_write_tx: mpsc::Sender<Vec<u8>>,
 ) -> anyhow::Result<()> {
     let listener = TcpListener::bind(format!("0.0.0.0:{}", state.config.serial_tcp_port)).await?;
     info!("Serial server listening...");
@@ -118,16 +122,10 @@ async fn handle_network(
                 let cnt = state.api_cnt.fetch_add(1, Ordering::Relaxed);
 
                 info!("Client #{cnt} connected from {}:{}", addr, addr.port());
-                let client_read_atx = read_atx.subscribe();
-                let client_write_atx = write_atx.clone();
+                let ser_read_rx = ser_read_tx.subscribe();
+                let ser_write_atx = ser_write_tx.clone();
                 tokio::spawn(async move {
-                    Box::pin(handle_client(
-                        cnt,
-                        stream,
-                        client_read_atx,
-                        client_write_atx,
-                    ))
-                    .await
+                    Box::pin(handle_client(cnt, stream, ser_read_rx, ser_write_atx)).await
                 });
             }
             Err(e) => {
@@ -142,14 +140,14 @@ async fn handle_network(
 async fn handle_client(
     c: u32,
     mut sock: TcpStream,
-    mut rx: broadcast::Receiver<Vec<u8>>,
-    tx: mpsc::Sender<Vec<u8>>,
+    mut ser_read_rx: broadcast::Receiver<Vec<u8>>,
+    ser_write_tx: mpsc::Sender<Vec<u8>>,
 ) -> anyhow::Result<()> {
     let mut buf = [0; BUFSZ];
 
     loop {
         tokio::select! {
-            Ok(msg) = rx.recv() => {
+            Ok(msg) = ser_read_rx.recv() => {
                 sock.write_all(msg.as_ref()).await?;
                 sock.flush().await?;
             }
@@ -168,7 +166,7 @@ async fn handle_client(
                     return Ok(());
                 }
 
-                tx.send(buf[0..n].to_owned()).await?;
+                ser_write_tx.send(buf[0..n].to_owned()).await?;
             }
         }
     }

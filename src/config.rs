@@ -1,11 +1,8 @@
 // config.rs
 
-use anyhow::bail;
 use askama::Template;
 use crc::{Crc, CRC_32_ISCSI};
 use esp_idf_svc::nvs;
-use serde::{Deserialize, Serialize};
-use std::net;
 
 use crate::*;
 

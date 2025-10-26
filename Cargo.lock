@@ -213,9 +213,9 @@ checksum = "812e12b5285cc515a9c72a5c1d3b6d46a19dac5acfef5265968c166106e31dd3"
 
 [[package]]
 name = "bstr"
-version = "1.12.0"
+version = "1.12.1"
 source = "registry+https://github.com/rust-lang/crates.io-index"
-checksum = "234113d19d0d7d613b40e86fb654acf958910802bcceab913a4f9e7cda03b1a4"
+checksum = "63044e1ae8e69f3b5a92c736ca6269b8d12fa7efe39bf34ddb06d102cf0e2cab"
 dependencies = [
  "memchr",
  "serde",
@@ -767,7 +767,7 @@ dependencies = [
 
 [[package]]
 name = "esp32serial"
-version = "1.1.0"
+version = "1.1.1"
 dependencies = [
  "anyhow",
  "askama",
@@ -775,7 +775,6 @@ dependencies = [
  "axum-macros",
  "build-data",
  "crc",
- "embedded-hal 1.0.0",
  "embedded-svc",
  "embuild",
  "esp-idf-hal",

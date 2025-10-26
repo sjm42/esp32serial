@@ -15,8 +15,6 @@ pub use axum_macros::debug_handler;
 use embedded_svc::http::client::Client as HttpClient;
 use esp_idf_svc::{http::client::EspHttpConnection, io, ota::EspOta};
 use std::any::Any;
-use std::{net, net::SocketAddr, pin::Pin, sync::Arc};
-use tokio::time::{sleep, Duration};
 
 use crate::*;
 
@@ -29,7 +27,7 @@ pub async fn run_api_server(state: Arc<Pin<Box<MyState>>>) -> anyhow::Result<()>
     }
 
     let listen = format!("0.0.0.0:{}", state.config.port);
-    let addr = listen.parse::<SocketAddr>()?;
+    let addr = listen.parse::<net::SocketAddr>()?;
 
     let app = Router::new()
         .route("/", get(get_index))

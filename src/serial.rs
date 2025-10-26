@@ -112,6 +112,7 @@ async fn handle_network(
     ser_read_tx: broadcast::Sender<Vec<u8>>,
     ser_write_tx: mpsc::Sender<Vec<u8>>,
 ) -> anyhow::Result<()> {
+    let write_enabled = state.config.serial_write_enabled;
     let listener = TcpListener::bind(format!("0.0.0.0:{}", state.config.serial_tcp_port)).await?;
     info!("Serial server listening...");
 
@@ -125,7 +126,14 @@ async fn handle_network(
                 let ser_read_rx = ser_read_tx.subscribe();
                 let ser_write_atx = ser_write_tx.clone();
                 tokio::spawn(async move {
-                    Box::pin(handle_client(cnt, stream, ser_read_rx, ser_write_atx)).await
+                    Box::pin(handle_client(
+                        cnt,
+                        stream,
+                        ser_read_rx,
+                        ser_write_atx,
+                        write_enabled,
+                    ))
+                    .await
                 });
             }
             Err(e) => {
@@ -142,6 +150,7 @@ async fn handle_client(
     mut sock: TcpStream,
     mut ser_read_rx: broadcast::Receiver<Vec<u8>>,
     ser_write_tx: mpsc::Sender<Vec<u8>>,
+    write_enabled: bool,
 ) -> anyhow::Result<()> {
     let mut buf = [0; BUFSZ];
 
@@ -165,8 +174,10 @@ async fn handle_client(
                     info!("Client #{c} disconnected");
                     return Ok(());
                 }
-
-                ser_write_tx.send(buf[0..n].to_owned()).await?;
+                // the data read from tcp sucket is thrown away unless serial write is enabled
+                if write_enabled {
+                    ser_write_tx.send(buf[0..n].to_owned()).await?;
+                }
             }
         }
     }

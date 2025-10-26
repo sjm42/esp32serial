@@ -29,6 +29,7 @@ var postCfgDataAsJson = async ({url, formData}) => {
     // convert booleans
     formObj.wifi_wpa2ent = (formObj.wifi_wpa2ent === "on");
     formObj.v4dhcp = (formObj.v4dhcp === "on");
+    formObj.serial_write_enabled = (formObj.serial_write_enabled === "on");
     // serialize to JSON
     const formDataJsonString = JSON.stringify(formObj);
 

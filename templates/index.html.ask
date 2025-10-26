@@ -26,6 +26,7 @@
     ("text", "dns2", dns2.to_string(), "DNS 2"),
     ("text", "bps", bps.to_string(), "Serial port bps"),
     ("text", "serial_tcp_port", serial_tcp_port.to_string(), "Serial tcp port"),
+    ("checkbox", "serial_write_enabled", serial_write_enabled.to_string(), "Allow serial writes"),
 ] -%}
 <form action="/conf" method="POST" name="esp32cfg">
     <table>

@@ -32,6 +32,7 @@ pub struct MyConfig {
 
     pub bps: u32,
     pub serial_tcp_port: u16,
+    pub serial_write_enabled: bool,
 }
 
 impl Default for MyConfig {
@@ -56,6 +57,7 @@ impl Default for MyConfig {
 
             bps: 9600,
             serial_tcp_port: DEFAULT_SERIAL_TCP_PORT,
+            serial_write_enabled: true,
         }
     }
 }

@@ -26,14 +26,18 @@ pub async fn run_serial(state: Arc<Pin<Box<MyState>>>) -> anyhow::Result<()> {
         sleep(Duration::from_secs(1)).await;
     }
 
-    // Note: here read/write in variable naming is referring to the serial port data direction
-
     // create a broadcast channel for sending serial msgs to all clients
     let (ser_read_tx, _) = broadcast::channel(CHANSZ);
 
     // create an mpsc channel for receiving serial port input from any client
     // mpsc = multi-producer, single consumer queue
-    let (ser_write_tx, ser_write_rx) = mpsc::channel(CHANSZ);
+    let (ser_write_tx, ser_write_rx) = match state.config.serial_write_enabled {
+        true => {
+            let c = mpsc::channel(CHANSZ);
+            (Some(c.0), Some(c.1))
+        }
+        false => (None, None),
+    };
 
     let _ = tokio::try_join!(
         Box::pin(handle_network(
@@ -50,7 +54,7 @@ pub async fn run_serial(state: Arc<Pin<Box<MyState>>>) -> anyhow::Result<()> {
 async fn handle_serial(
     state: Arc<Pin<Box<MyState>>>,
     ser_read_tx: broadcast::Sender<Vec<u8>>,
-    mut ser_write_rx: mpsc::Receiver<Vec<u8>>,
+    ser_write_rx: Option<mpsc::Receiver<Vec<u8>>>,
 ) -> anyhow::Result<()> {
     info!("UART1 initialization...");
 
@@ -77,10 +81,19 @@ async fn handle_serial(
 
     info!("UART1 opened.");
 
+    // create a dummy rx/tx pair if we did not get one
+    let (_dummy_tx, mut write_rx) = match ser_write_rx {
+        Some(rx) => (None, rx),
+        None => {
+            let c = mpsc::channel(1);
+            (Some(c.0), c.1)
+        }
+    };
+
     let mut buf = [0; BUFSZ];
     loop {
         tokio::select! {
-            Some(msg) = ser_write_rx.recv() => {
+            Some(msg) = write_rx.recv() => {
                 led.toggle().ok();
                 // info!("serial write {} bytes", msg.len());
                 uart.write_all(msg.as_ref()).await?;
@@ -110,12 +123,12 @@ async fn handle_serial(
 async fn handle_network(
     state: Arc<Pin<Box<MyState>>>,
     ser_read_tx: broadcast::Sender<Vec<u8>>,
-    ser_write_tx: mpsc::Sender<Vec<u8>>,
+    ser_write_tx: Option<mpsc::Sender<Vec<u8>>>,
 ) -> anyhow::Result<()> {
-    let write_enabled = state.config.serial_write_enabled;
     let listener = TcpListener::bind(format!("0.0.0.0:{}", state.config.serial_tcp_port)).await?;
     info!("Serial server listening...");
 
+    let write_enabled = ser_write_tx.is_some();
     loop {
         let stream = listener.accept().await;
         match stream {
@@ -124,13 +137,13 @@ async fn handle_network(
 
                 info!("Client #{cnt} connected from {}:{}", addr, addr.port());
                 let ser_read_rx = ser_read_tx.subscribe();
-                let ser_write_atx = ser_write_tx.clone();
+                let ser_write_tx_c = ser_write_tx.clone();
                 tokio::spawn(async move {
                     Box::pin(handle_client(
                         cnt,
                         stream,
                         ser_read_rx,
-                        ser_write_atx,
+                        ser_write_tx_c,
                         write_enabled,
                     ))
                     .await
@@ -149,7 +162,7 @@ async fn handle_client(
     c: u32,
     mut sock: TcpStream,
     mut ser_read_rx: broadcast::Receiver<Vec<u8>>,
-    ser_write_tx: mpsc::Sender<Vec<u8>>,
+    ser_write_tx: Option<mpsc::Sender<Vec<u8>>>,
     write_enabled: bool,
 ) -> anyhow::Result<()> {
     let mut buf = [0; BUFSZ];
@@ -176,7 +189,7 @@ async fn handle_client(
                 }
                 // the data read from tcp sucket is thrown away unless serial write is enabled
                 if write_enabled {
-                    ser_write_tx.send(buf[0..n].to_owned()).await?;
+                    ser_write_tx.as_ref().unwrap().send(buf[0..n].to_owned()).await?;
                 }
             }
         }

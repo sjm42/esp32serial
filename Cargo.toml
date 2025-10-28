@@ -1,6 +1,6 @@
 [package]
 name = "esp32serial"
-version = "1.2.0"
+version = "1.2.1"
 authors = ["Sami J. Mäkinen <sjm@iki.fi>"]
 edition = "2024"
 resolver = "2"

@@ -78,17 +78,10 @@ async fn handle_serial(
         &ser_config,
     )?;
     let mut led = PinDriver::output(my_ser.led)?;
-
     info!("UART1 opened.");
 
-    // create a dummy rx/tx pair if we did not get one
-    let (_dummy_tx, mut write_rx) = match ser_write_rx {
-        Some(rx) => (None, rx),
-        None => {
-            let c = mpsc::channel(1);
-            (Some(c.0), c.1)
-        }
-    };
+    // create a dummy rx pair if we did not get one
+    let mut write_rx = ser_write_rx.unwrap_or_else(|| mpsc::channel(1).1);
 
     let mut buf = [0; BUFSZ];
     loop {
@@ -104,7 +97,7 @@ async fn handle_serial(
                 match res {
                     Ok(0) => {
                         info!("Serial <EOF>");
-                        return Ok(());
+                        break;
                     }
                     Ok(n) => {
                         led.toggle().ok();
@@ -118,6 +111,7 @@ async fn handle_serial(
             }
         }
     }
+    Ok(())
 }
 
 async fn handle_network(

@@ -1,23 +1,28 @@
 // bin/esp32serial.rs
+
 #![warn(clippy::large_futures)]
 
-use esp_idf_hal::gpio::{AnyInputPin, Input, PinDriver};
 use esp_idf_hal::{
     delay::FreeRtos,
-    gpio::{InputPin, OutputPin},
+    gpio::{AnyInputPin, Input, InputPin, OutputPin, PinDriver},
     prelude::Peripherals,
 };
 use esp_idf_svc::{
-    eventloop::EspSystemEventLoop, hal::gpio, nvs, ota::EspOta, ping, timer::EspTaskTimerService,
+    eventloop::EspSystemEventLoop, nvs, ota::EspOta, ping, timer::EspTaskTimerService,
     wifi::WifiDriver,
 };
 use esp_idf_sys::esp;
 
 use esp32serial::*;
 
+#[cfg(all(feature = "esp32-c3", feature = "esp-wroom-32"))]
+compile_error!("Select only one hardware feature: `esp32-c3` or `esp-wroom-32`");
+#[cfg(not(any(feature = "esp32-c3", feature = "esp-wroom-32")))]
+compile_error!("Select a hardware feature: `esp32-c3` or `esp-wroom-32`");
+
 // DANGER! DO NOT USE THIS until esp-idf-svc supports newer versions of ESP-IDF
 // - until then, only up to esp-idf 5.3.2 is supported with esp_app_desc!()
-// Without the macro usage up to esp-idf v5.4.2 is supported.
+// Without the macro usage up to esp-idf v5.4 is supported.
 // ESP-IDF version 5.5 requires updated esp-idf-svc crate to be released.
 
 // use esp_idf_sys::esp_app_desc;
@@ -84,13 +89,25 @@ fn main() -> anyhow::Result<()> {
     let peripherals = Peripherals::take().unwrap();
     let pins = peripherals.pins;
 
-    let tx = pins.gpio0.downgrade_output();
-    let rx = pins.gpio1.downgrade_input();
-    let uart = peripherals.uart1;
-    let led = pins.gpio8.downgrade_output();
-    let button = gpio::PinDriver::input(pins.gpio9.downgrade_input())?;
+    #[cfg(feature = "esp32-c3")]
+    let (tx, rx, led, button) = (
+        pins.gpio0.downgrade_output(),
+        pins.gpio1.downgrade_input(),
+        pins.gpio8.downgrade_output(),
+        PinDriver::input(pins.gpio9.downgrade_input())?,
+    );
 
-    let wifidriver = WifiDriver::new(
+    #[cfg(feature = "esp-wroom-32")]
+    let (tx, rx, led, button) = (
+        pins.gpio17.downgrade_output(),
+        pins.gpio16.downgrade_input(),
+        pins.gpio2.downgrade_output(),
+        PinDriver::input(pins.gpio0.downgrade_input())?,
+    );
+
+    let uart = peripherals.uart1;
+
+    let wifi_driver = WifiDriver::new(
         peripherals.modem,
         sysloop.clone(),
         Some(nvs_default_partition),
@@ -118,7 +135,7 @@ fn main() -> anyhow::Result<()> {
                 _ = Box::pin(poll_reset(shared_state.clone(), button)) => { error!("poll_reset() ended."); }
                 _ = Box::pin(run_api_server(shared_state.clone())) => { error!("run_api_server() ended."); }
                 _ = Box::pin(run_serial(shared_state.clone())) => { error!("run_serial() ended."); }
-                _ = Box::pin(wifi_loop.run(wifidriver, sysloop, timer)) => { error!("wifi_loop() ended."); }
+                _ = Box::pin(wifi_loop.run(wifi_driver, sysloop, timer)) => { error!("wifi_loop() ended."); }
                 _ = Box::pin(pinger(shared_state.clone())) => { error!("pinger() ended."); }
 
             };

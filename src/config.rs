@@ -1,14 +1,14 @@
 // config.rs
 
 use askama::Template;
-use crc::{Crc, CRC_32_ISCSI};
+use crc::{CRC_32_ISCSI, Crc};
 use esp_idf_svc::nvs;
 
 use crate::*;
 
 pub const NVS_BUF_SIZE: usize = 256;
 pub const BOOT_FAIL_MAX: u8 = 4;
-const DEFAULT_API_PORT: u16 = 80;
+pub const DEFAULT_API_PORT: u16 = 80;
 const DEFAULT_SERIAL_TCP_PORT: u16 = 23;
 
 const CONFIG_NAME: &str = "cfg";
@@ -16,8 +16,6 @@ const CONFIG_NAME: &str = "cfg";
 #[derive(Clone, Debug, Serialize, Deserialize, Template)]
 #[template(path = "index.html.ask", escape = "html")]
 pub struct MyConfig {
-    pub port: u16,
-
     pub wifi_ssid: String,
     pub wifi_pass: String,
     pub wifi_wpa2ent: bool,
@@ -38,11 +36,6 @@ pub struct MyConfig {
 impl Default for MyConfig {
     fn default() -> Self {
         Self {
-            port: option_env!("API_PORT")
-                .unwrap_or("-")
-                .parse()
-                .unwrap_or(DEFAULT_API_PORT),
-
             wifi_ssid: option_env!("WIFI_SSID").unwrap_or("internet").into(),
             wifi_pass: option_env!("WIFI_PASS").unwrap_or("password").into(),
             wifi_wpa2ent: false,

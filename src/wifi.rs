@@ -3,8 +3,7 @@
 use embedded_svc::wifi::{AuthMethod, ClientConfiguration, Configuration};
 use esp_idf_svc::{
     eventloop::{EspEventLoop, System},
-    ipv4,
-    netif,
+    ipv4, netif,
     timer::{EspTimerService, Task},
     wifi::{AsyncWifi, EspWifi, WifiDriver},
 };
@@ -50,7 +49,11 @@ impl<'a> WifiLoop<'a> {
             mac[0], mac[1], mac[2], mac[3], mac[4], mac[5],
         );
 
-        let espwifi = EspWifi::wrap_all(wifidriver, net_if, netif::EspNetif::new(netif::NetifStack::Ap)?)?;
+        let espwifi = EspWifi::wrap_all(
+            wifidriver,
+            net_if,
+            netif::EspNetif::new(netif::NetifStack::Ap)?,
+        )?;
         self.wifi = Some(AsyncWifi::wrap(espwifi, sysloop, timer.clone())?);
         Box::pin(self.configure()).await?;
 

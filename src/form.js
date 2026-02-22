@@ -17,15 +17,14 @@ const handleCfgSubmit = async (event) => {
     } catch (error) {
         console.error(error);
     }
-}
+};
 
-var postCfgDataAsJson = async ({url, formData}) => {
-    let formObj = Object.fromEntries(formData.entries());
+const postCfgDataAsJson = async ({url, formData}) => {
+    const formObj = Object.fromEntries(formData.entries());
     // convert integers
-    formObj.port = parseInt(formObj.port);
-    formObj.v4mask = parseInt(formObj.v4mask);
-    formObj.bps = parseInt(formObj.bps);
-    formObj.serial_tcp_port = parseInt(formObj.serial_tcp_port);
+    formObj.v4mask = parseInt(formObj.v4mask, 10);
+    formObj.bps = parseInt(formObj.bps, 10);
+    formObj.serial_tcp_port = parseInt(formObj.serial_tcp_port, 10);
     // convert booleans
     formObj.wifi_wpa2ent = (formObj.wifi_wpa2ent === "on");
     formObj.v4dhcp = (formObj.v4dhcp === "on");
@@ -35,9 +34,9 @@ var postCfgDataAsJson = async ({url, formData}) => {
 
     const fetchOptions = {
         method: "POST",
-        mode: 'cors',
+        mode: "cors",
         keepalive: false,
-        headers: {'Accept': 'application/json', 'Content-Type': 'application/json'},
+        headers: {"Accept": "application/json", "Content-Type": "application/json"},
         body: formDataJsonString
     };
     const response = await fetch(url, fetchOptions);
@@ -48,5 +47,5 @@ var postCfgDataAsJson = async ({url, formData}) => {
     }
 
     return response.json();
-}
+};
 // EOF

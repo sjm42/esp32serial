@@ -26,13 +26,14 @@ pub async fn run_api_server(state: Arc<Pin<Box<MyState>>>) -> anyhow::Result<()>
         sleep(Duration::from_secs(1)).await;
     }
 
-    let listen = format!("0.0.0.0:{}", state.config.port);
+    let listen = format!("0.0.0.0:{}", DEFAULT_API_PORT);
     let addr = listen.parse::<net::SocketAddr>()?;
 
     let app = Router::new()
         .route("/", get(get_index))
         .route("/favicon.ico", get(get_favicon))
         .route("/form.js", get(get_formjs))
+        .route("/index.css", get(get_indexcss))
         .route("/conf", get(get_config).post(set_config).options(options))
         .route("/reset_conf", get(reset_config))
         .route("/fw", post(update_fw).options(options))
@@ -97,6 +98,19 @@ pub async fn get_formjs(State(state): State<Arc<Pin<Box<MyState>>>>) -> Response
         StatusCode::OK,
         [(header::CONTENT_TYPE, "text/javascript")],
         formjs.to_vec(),
+    )
+        .into_response()
+}
+
+pub async fn get_indexcss(State(state): State<Arc<Pin<Box<MyState>>>>) -> Response<Body> {
+    let cnt = state.api_cnt.fetch_add(1, Ordering::Relaxed);
+    info!("#{cnt} get_indexcss()");
+
+    let indexcss = include_bytes!("index.css");
+    (
+        StatusCode::OK,
+        [(header::CONTENT_TYPE, "text/css; charset=utf-8")],
+        indexcss.to_vec(),
     )
         .into_response()
 }

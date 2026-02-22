@@ -2,18 +2,23 @@
 <html>
 <head>
   <meta charset="utf-8"/>
+  <meta name="viewport" content="width=device-width, initial-scale=1"/>
   <title>ESP32 remote serial port</title>
   <script src="./form.js"></script>
+  <link rel="stylesheet" href="./index.css">
 </head>
 
 <body>
+<main class="app">
+<section class="panel">
 <h1>ESP32 remote serial port</h1>
 <p>Firmware version {{ crate::FW_VERSION }}</p>
 <p>OTA slot {{ askama::get_value::<String>("ota_slot")? }}</p>
+</section>
 
+<section class="panel">
 <h2>Settings</h2>
 {% let myform = [
-    ("text", "port", port.to_string(), "Port (1-65535)"),
     ("text", "wifi_ssid", wifi_ssid.to_string(), "WiFi SSID"),
     ("checkbox", "wifi_wpa2ent", wifi_wpa2ent.to_string(), "WPA2 Enterprise"),
     ("text", "wifi_username", wifi_username.to_string(), "WiFi username"),
@@ -30,28 +35,29 @@
 ] -%}
 <form action="/conf" method="POST" name="esp32cfg">
     <table>
-    {%- for (itype, name, value, descr) in myform %}
+{%- for (itype, name, value, descr) in myform %}
         <tr>
-        {%- if *itype == "checkbox" %}
+{%- if *itype == "checkbox" %}
             <th><label for="{{name}}">{{descr}}:</label></th>
             <th><input name="{{name}}" type="{{itype}}"{% if value == "true" %} checked{% endif %}></th>
-        {%- else %}
+{%- else %}
             <th><label for="{{name}}">{{descr}}:</label></th>
             <th><input name="{{name}}" type="{{itype}}" value="{{value}}"></th>
-        {%- endif %}
+{%- endif %}
         </tr>
-    {%- endfor %}
+{%- endfor %}
     </table>
     <input type="submit" value="Submit">
 </form>
-<br>
+</section>
 
-<hr>
+<section class="panel danger">
 <h2>Update firmware (DANGER)</h2>
 <form action="/fw" method="POST" name="esp32fw">
     <input type="text" id="firmware" name="url">
     <input type="submit" value="Update!">
 </form>
-<hr>
+</section>
+</main>
 </body>
 </html>

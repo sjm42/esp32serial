@@ -7,14 +7,14 @@ pub use std::{
     net,
     pin::Pin,
     sync::{
-        atomic::{AtomicU32, Ordering},
         Arc,
+        atomic::{AtomicU32, Ordering},
     },
 };
 pub use tokio::{
     sync::RwLock,
     task,
-    time::{sleep, Duration},
+    time::{Duration, sleep},
 };
 pub use tracing::*;
 

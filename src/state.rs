@@ -6,10 +6,10 @@ use esp_idf_svc::nvs;
 use crate::*;
 
 pub struct MySerial {
-    pub uart: UART1,
-    pub tx: AnyOutputPin,
-    pub rx: AnyInputPin,
-    pub led: AnyOutputPin,
+    pub uart: UART1<'static>,
+    pub tx: AnyOutputPin<'static>,
+    pub rx: AnyInputPin<'static>,
+    pub led: AnyOutputPin<'static>,
 }
 unsafe impl Sync for MySerial {}
 

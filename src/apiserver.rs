@@ -2,14 +2,14 @@
 
 use askama::Template;
 use axum::{
-    body::Body, extract::{Form, State},
+    Json, Router,
+    body::Body,
+    extract::{Form, State},
     http::StatusCode,
-    http::{header, Response},
+    http::{Response, header},
     response::Html,
     response::IntoResponse,
     routing::*,
-    Json,
-    Router,
 };
 pub use axum_macros::debug_handler;
 use embedded_svc::http::client::Client as HttpClient;

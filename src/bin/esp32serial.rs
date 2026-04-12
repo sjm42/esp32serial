@@ -4,8 +4,8 @@
 
 use esp_idf_hal::{
     delay::FreeRtos,
-    gpio::{AnyInputPin, Input, InputPin, OutputPin, PinDriver},
-    prelude::Peripherals,
+    gpio::{Input, PinDriver, Pull},
+    peripherals::Peripherals,
 };
 use esp_idf_svc::{
     eventloop::EspSystemEventLoop, nvs, ota::EspOta, ping, timer::EspTaskTimerService,
@@ -19,11 +19,6 @@ use esp32serial::*;
 compile_error!("Select only one hardware feature: `esp32-c3` or `esp-wroom-32`");
 #[cfg(not(any(feature = "esp32-c3", feature = "esp-wroom-32")))]
 compile_error!("Select a hardware feature: `esp32-c3` or `esp-wroom-32`");
-
-// DANGER! DO NOT USE THIS until esp-idf-svc supports newer versions of ESP-IDF
-// - until then, only up to esp-idf 5.3.2 is supported with esp_app_desc!()
-// Without the macro usage up to esp-idf v5.4 is supported.
-// ESP-IDF version 5.5 requires updated esp-idf-svc crate to be released.
 
 // use esp_idf_sys::esp_app_desc;
 // esp_app_desc!();
@@ -91,18 +86,18 @@ fn main() -> anyhow::Result<()> {
 
     #[cfg(feature = "esp32-c3")]
     let (tx, rx, led, button) = (
-        pins.gpio0.downgrade_output(),
-        pins.gpio1.downgrade_input(),
-        pins.gpio8.downgrade_output(),
-        PinDriver::input(pins.gpio9.downgrade_input())?,
+        pins.gpio0.degrade_output(),
+        pins.gpio1.degrade_input(),
+        pins.gpio8.degrade_output(),
+        PinDriver::input(pins.gpio9.degrade_input(), Pull::Floating)?,
     );
 
     #[cfg(feature = "esp-wroom-32")]
     let (tx, rx, led, button) = (
-        pins.gpio17.downgrade_output(),
-        pins.gpio16.downgrade_input(),
-        pins.gpio2.downgrade_output(),
-        PinDriver::input(pins.gpio0.downgrade_input())?,
+        pins.gpio17.degrade_output(),
+        pins.gpio16.degrade_input(),
+        pins.gpio2.degrade_output(),
+        PinDriver::input(pins.gpio0.degrade_input(), Pull::Floating)?,
     );
 
     let uart = peripherals.uart1;
@@ -149,7 +144,7 @@ fn main() -> anyhow::Result<()> {
 
 async fn poll_reset(
     mut state: Arc<Pin<Box<MyState>>>,
-    button: PinDriver<'_, AnyInputPin, Input>,
+    button: PinDriver<'_, Input>,
 ) -> anyhow::Result<()> {
     loop {
         sleep(Duration::from_secs(2)).await;
@@ -166,7 +161,7 @@ async fn poll_reset(
 
 async fn reset_button<'a>(
     state: &mut Arc<std::pin::Pin<Box<MyState>>>,
-    button: &PinDriver<'a, AnyInputPin, Input>,
+    button: &PinDriver<'a, Input>,
 ) -> anyhow::Result<()> {
     let mut reset_cnt = CONFIG_RESET_COUNT;
 

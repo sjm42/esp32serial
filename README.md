@@ -46,16 +46,16 @@ Backward-compatible aliases are still accepted:
 
 ## Building and flashing
 
-Requires Rust nightly (`rust-toolchain.toml`) and the [ESP-IDF](https://github.com/espressif/esp-idf) build environment. Install [espflash](https://github.com/esp-rs/espflash) for flashing/image creation.
+Requires the Rust toolchain from `rust-toolchain.toml` and the [ESP-IDF](https://github.com/espressif/esp-idf) build environment. The default ESP32-C3 target uses `nightly`; the ESP-WROOM-32/Xtensa target uses the `esp` toolchain. Install [espflash](https://github.com/esp-rs/espflash) for flashing and OTA image creation.
 
 ```bash
 # Build release firmware (default target: esp32-c3)
-cargo build --release
+cargo build -r
 
-# Build, flash, and monitor (ESP32-C3)
+# Build, flash, and monitor (ESP32-C3; runs cargo run -r)
 ./flash_c3
 
-# Build, flash, and monitor (ESP-WROOM-32 / Xtensa)
+# Build, flash, and monitor (ESP-WROOM-32 / Xtensa; uses cargo +esp)
 ./flash_wroom32
 
 # Create OTA firmware images
@@ -68,20 +68,47 @@ MCU=esp32 cargo +esp build -r --target xtensa-esp32-espidf --no-default-features
 
 Default WiFi credentials can be overridden at build time via `WIFI_SSID` and `WIFI_PASS`.
 
+## Development checks
+
+Useful local checks before flashing or submitting changes:
+
+```bash
+cargo check
+cargo test --no-run
+cargo fmt
+cargo clippy --all-targets
+MCU=esp32 cargo +esp clippy --target xtensa-esp32-espidf --no-default-features --features esp-wroom-32
+```
+
+There is no dedicated `tests/` directory yet. Add unit tests next to the code they cover, especially for configuration parsing, serialization, and validation. Plain `cargo test` uses the ESP runner and may try to flash hardware; use `cargo test --no-run` when you only need to verify test compilation.
+
+For dependency maintenance:
+
+```bash
+cargo update --dry-run
+cargo outdated --root-deps-only
+```
+
+`Cargo.lock` is committed for reproducible firmware builds. Compatible lockfile updates can be applied with `cargo update`; semver-incompatible crate upgrades should be checked with a normal build before committing.
+
 ## Configuration
 
 Runtime settings are configurable through the web UI served at `http://<device-ip>/` on port **80** (fixed in code).
 
-| Setting             | Default       | Description                         |
-|---------------------|---------------|-------------------------------------|
-| WiFi SSID           | internet      | Wireless network name               |
-| WiFi password       | password      | Wireless network password           |
-| WPA2-Enterprise     | off           | Enable EAP authentication           |
-| WiFi username       | (empty)       | WPA2-Enterprise username/identity   |
-| DHCP                | on            | Use DHCP for IPv4 addressing        |
-| Baud rate           | 9600          | UART serial speed                   |
-| Serial TCP port     | 23            | TCP port for serial connections     |
-| Serial write        | on            | Allow TCP clients to write to UART  |
+| Setting         | Default           | Description                          |
+|-----------------|-------------------|--------------------------------------|
+| WiFi SSID       | internet          | Wireless network name                |
+| WiFi password   | password          | Wireless network password            |
+| WPA2-Enterprise | off               | Enable EAP authentication            |
+| WiFi username   | (empty)           | WPA2-Enterprise username/identity    |
+| DHCP            | on                | Use DHCP for IPv4 addressing         |
+| IPv4 address    | 0.0.0.0           | Static IPv4 address when DHCP is off |
+| IPv4 mask       | 0                 | Static subnet mask length (`0..30`)  |
+| IPv4 gateway    | 0.0.0.0           | Static gateway when DHCP is off      |
+| DNS servers     | 0.0.0.0 / 0.0.0.0 | Static DNS servers when DHCP is off  |
+| Baud rate       | 9600              | UART serial speed                    |
+| Serial TCP port | 23                | TCP port for serial connections      |
+| Serial write    | on                | Allow TCP clients to write to UART   |
 
 Configuration is persisted to NVS using [postcard](https://github.com/jamesmunns/postcard) binary serialization with CRC32 integrity validation.
 
